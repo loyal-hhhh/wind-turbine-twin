@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>托塔天王风电混塔数字孪生平台</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;overflow:hidden;font-family:"Microsoft YaHei",sans-serif;background:#081221;color:#cfe3ff}
+  /* ===== 科技感：背景点阵（扫描线移入 #center，见下方） ===== */
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:radial-gradient(rgba(93,176,255,.13) 1px,transparent 1px);
+    background-size:24px 24px;opacity:.45}
+  @keyframes scan{0%{top:-2%}100%{top:102%}}
+  @keyframes blink{50%{opacity:.75}}
+  @keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+  #app{display:grid;height:100vh;grid-template-rows:64px 1fr 230px;position:relative;z-index:2}
+  /* ===== 顶部标题栏 ===== */
+  #header{display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:relative;
+    background:linear-gradient(180deg,#0e2a4d,#0a1c33 60%,#081221);border-bottom:1px solid rgba(80,160,255,.25)}
+  #header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(93,176,255,.65),transparent)}
+  #header .side{font-size:13px;color:#8fb3d9;white-space:nowrap;min-width:230px;letter-spacing:1px}
+  #header .side.r{text-align:right}
+  .live{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:7px;
+    vertical-align:middle;box-shadow:0 0 8px #4caf50;animation:breathe 2s infinite}
+  #header .title{position:absolute;left:50%;transform:translateX(-50%);text-align:center}
+  #header .title b{font-size:21px;letter-spacing:5px;color:#e8f4ff;
+    text-shadow:0 0 20px rgba(80,180,255,.6),0 0 60px rgba(80,180,255,.25)}
+  #header .title span{display:block;font-size:10px;color:#6f9ac9;letter-spacing:8px;margin-top:3px}
+  /* ===== 中区三栏 ===== */
+  #middle{display:grid;grid-template-columns:300px 1fr 330px;min-height:0}
+  #left{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:0;border-right:1px solid rgba(80,160,255,.15)}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .card{background:repeating-linear-gradient(45deg,rgba(93,176,255,.05) 0 1px,transparent 1px 6px),
+    linear-gradient(180deg,rgba(15,38,70,.8),rgba(10,25,48,.8));
+    border:1px solid rgba(80,160,255,.25);border-radius:8px;
+    padding:8px 10px;text-align:center;position:relative;overflow:hidden;
+    box-shadow:0 0 10px rgba(93,176,255,.05)}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:linear-gradient(180deg,#5db0ff,#1e4a7a)}
+  .card .v{font-size:18px;color:#7fd0ff;font-weight:bold;line-height:1.3;text-shadow:0 0 12px rgba(127,208,255,.45)}
+  .card .k{font-size:11px;color:#8fa8c8;margin-top:2px;letter-spacing:1px}
+  #chartTrendBox{flex:1;min-height:0;background:rgba(15,38,70,.45);border:1px solid rgba(80,160,255,.2);
+    border-radius:8px;padding:6px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  #chartTrendBox::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  #chartTrendBox::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  #chartTrendBox .pt{font-size:12px;color:#8fb3d9;padding:0 4px 4px;letter-spacing:1px}
+  #chartTrend{width:100%;height:calc(100% - 24px)}
+  /* 中央 3D */
+  #center{position:relative;min-height:0;overflow:hidden;margin:6px;border-radius:10px;
+    border:1px solid rgba(80,160,255,.18);box-shadow:inset 0 0 50px rgba(93,176,255,.07)}
+  /* 扫描线：只在风机 3D 区域 */
+  #center::after{content:"";position:absolute;left:0;right:0;height:2px;top:-2%;z-index:5;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(93,176,255,.5),transparent);
+    animation:scan 6s linear infinite}
+  /* 右侧 */
+  #right{padding:10px;display:flex;flex-direction:column;gap:10px;min-height:0;border-left:1px solid rgba(80,160,255,.15)}
+  .panel{background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;
+    padding:10px 12px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  .panel::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  .panel::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  .panel .pt{font-size:12px;color:#8fb3d9;margin-bottom:6px;letter-spacing:2px;padding-left:8px;
+    border-left:2px solid #5db0ff}
+  #runPanel .row{font-size:14px;line-height:2.1}
+  #runPanel .row b{color:#7fd0ff;text-shadow:0 0 8px rgba(127,208,255,.4)}
+  .st{display:inline-block;padding:2px 12px;border-radius:4px;font-size:12px;color:#fff;background:#4a6a8a}
+  #turbineSel{background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);border-radius:4px;
+    padding:3px 6px;font-size:13px;outline:none;margin-left:4px}
+  #turbineSel:focus{border-color:#5db0ff;box-shadow:0 0 8px rgba(93,176,255,.3)}
+  #selHint{font-size:11px;color:#7fd0ff;min-height:15px;padding:2px 0 0 8px}
+  #sensorTable{width:100%;border-collapse:collapse;font-size:12px}
+  #sensorTable th{color:#8fb3d9;text-align:left;padding:3px 4px;border-bottom:1px solid rgba(80,160,255,.2);font-weight:normal}
+  #sensorTable td{padding:3px 4px;border-bottom:1px solid rgba(80,160,255,.08)}
+  .ok{color:#7fd0ff}
+  .bad{color:#ff5252;font-weight:bold}
+  /* ===== 底部 ===== */
+  #bottom{display:grid;grid-template-columns:220px 1fr;gap:10px;padding:8px 12px;min-height:0;border-top:1px solid rgba(80,160,255,.15)}
+  #bottomNav{display:flex;flex-direction:column;gap:8px;justify-content:center}
+  #bottomNav .btn{background:rgba(15,38,70,.6);border:1px solid rgba(80,160,255,.3);color:#9fc3e8;border-radius:8px;
+    padding:10px 0;font-size:14px;cursor:pointer;text-align:center;transition:.15s;user-select:none;letter-spacing:2px;
+    box-shadow:0 0 8px rgba(93,176,255,.05)}
+  #bottomNav .btn:hover{background:rgba(30,90,160,.5);color:#fff;box-shadow:0 0 14px rgba(93,176,255,.2)}
+  #bottomNav .btn.on{background:rgba(30,90,160,.6);color:#fff;border-color:#5db0ff;box-shadow:0 0 16px rgba(93,176,255,.35)}
+  #bottomContent{position:relative;min-height:0}
+  #chartPieBox,#chartBarBox,#tableBox{position:absolute;inset:0;display:none;
+    background:repeating-linear-gradient(45deg,rgba(93,176,255,.04) 0 1px,transparent 1px 7px),
+    rgba(15,38,70,.4);
+    border:1px solid rgba(80,160,255,.18);border-radius:8px;padding:6px}
+  #chartPieBox.on,#chartBarBox.on,#tableBox.on{display:block}
+  #chartPie,#chartBar{width:100%;height:100%}
+  /* 统计页：汇总指标条 */
+  #chartBarBox .statRow{font-size:12px;color:#cfe3ff;padding:2px 4px 6px;letter-spacing:1px;line-height:1.9}
+  #chartBarBox .statRow b{color:#7fd0ff;text-shadow:0 0 8px rgba(127,208,255,.4)}
+  #chartBarBox .statRow .tag{font-size:10px;color:#8fa8c8;border:1px solid rgba(80,160,255,.3);
+    border-radius:3px;padding:0 5px;margin-left:8px;letter-spacing:1px}
+  .statRow select{background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);
+    border-radius:4px;font-size:11px;padding:1px 4px;outline:none;margin-left:6px}
+  .statRow select:focus{border-color:#5db0ff}
+  #chartBarBox #chartBar{width:100%;height:calc(100% - 38px)}
+  #tableBox table{width:100%;border-collapse:collapse;font-size:12px}
+  #tableBox th{color:#8fb3d9;text-align:left;padding:5px 8px;border-bottom:1px solid rgba(80,160,255,.25)}
+  #tableBox td{padding:5px 8px;border-bottom:1px solid rgba(80,160,255,.08)}
+  /* ===== 弹层（缩小版信息卡 + 告警横幅） ===== */
+  #alertBar{position:absolute;top:74px;left:50%;transform:translateX(-50%);display:none;background:#c62828;color:#fff;
+    padding:10px 24px;border-radius:8px;font-size:15px;font-weight:bold;z-index:30;
+    box-shadow:0 4px 20px rgba(198,40,40,.5);animation:blink 1s infinite}
+  #infoCard{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);display:none;
+    background:rgba(8,22,40,.94);color:#e8f4ff;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.7;
+    z-index:20;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.5);max-width:280px;
+    border:1px solid rgba(80,160,255,.4)}
+  #infoCard b{color:#7fd0ff;font-size:14px;letter-spacing:1px}
+  #infoCard span{font-size:12px;color:#cfe3ff}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 顶部标题栏 -->
+  <div id="header">
+    <div class="side"><span class="live"></span>蒙城县板桥集风电场 · 全场监测</div>
+    <div class="title"><b>托塔天王风电混塔数字孪生平台</b><span>TUOTA TIANWANG WIND TURBINE DIGITAL TWIN</span></div>
+    <div class="side r" id="clock">--</div>
+  </div>
+
+  <!-- 中区三栏 -->
+  <div id="middle">
+    <!-- 左：全场总览指标卡 + 组合图 -->
+    <div id="left">
+      <div class="cards">
+        <div class="card"><div class="v" id="c_total">--</div><div class="k">风机总数</div></div>
+        <div class="card"><div class="v" id="c_run">--</div><div class="k">运行台数</div></div>
+        <div class="card"><div class="v" id="c_alarm">--</div><div class="k">告警台数</div></div>
+        <div class="card"><div class="v" id="c_ws">--</div><div class="k">全场平均风速</div></div>
+      </div>
+      <div id="chartTrendBox">
+        <div class="pt">选中风机 · 风速 功率 实时趋势（最近30点）</div>
+        <div id="chartTrend"></div>
+      </div>
+    </div>
+
+    <!-- 中：3D 场景 -->
+    <div id="center"></div>
+
+    <!-- 右：运行数据 + 传感器 -->
+    <div id="right">
+      <div class="panel" id="runPanel">
+        <div class="pt">实时运行数据（当前风机 <select id="turbineSel"></select>）</div>
+        <div class="row">风速 <b id="d_ws">--</b> m/s &nbsp;&nbsp; 功率 <b id="d_pw">--</b> kW</div>
+        <div class="row">转速 <b id="d_rpm">--</b> rpm &nbsp;&nbsp; 状态 <b class="st" id="d_st">--</b></div>
+        <div id="selHint"></div>
+      </div>
+      <div class="panel">
+        <div class="pt">结构监测传感器</div>
+        <table id="sensorTable">
+          <tr><th>项目</th><th>实时值</th><th>状态</th></tr>
+          <tbody id="sensorBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部：导航 + 图表切换 -->
+  <div id="bottom">
+    <div id="bottomNav">
+      <div class="btn on" onclick="switchView('pie')">🏠 主页</div>
+      <div class="btn" onclick="switchView('bar')">📊 统计</div>
+      <div class="btn" onclick="switchView('table')">🔍 巡检</div>
+    </div>
+    <div id="bottomContent">
+      <div id="chartPieBox" class="on"><div id="chartPie"></div></div>
+      <div id="chartBarBox">
+        <div class="statRow" id="statRow">加载中…</div>
+        <div id="chartBar"></div>
+      </div>
+      <div id="tableBox">
+        <div class="statRow" id="patrolRow">加载中…</div>
+        <table>
+          <tr><th>巡检项</th><th>型号</th><th>量程</th><th>实时值</th><th>判定</th><th>巡检结果</th><th>巡检时间</th></tr>
+          <tbody id="detailBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="infoCard"></div>
+<div id="alertBar"></div>
+
+<script type="importmap">
+{"imports":{
+  "three":"./js/three/three.module.js",
+  "three/addons/":"./js/three/addons/"
+}}
+</script>
+<script src="js/echarts.min.js"></script>
+<script src="js/windfarms.js"></script>
+<script src="js/data.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/ui.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
