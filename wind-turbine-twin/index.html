@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>托塔天王风电混塔数字孪生平台</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;overflow:hidden;font-family:"Microsoft YaHei",sans-serif;background:#081221;color:#cfe3ff}
+  /* ===== 科技感：背景点阵 ===== */
+  body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+    background-image:radial-gradient(rgba(93,176,255,.13) 1px,transparent 1px);
+    background-size:24px 24px;opacity:.45}
+  @keyframes scan{0%{top:-2%}100%{top:102%}}
+  @keyframes blink{50%{opacity:.75}}
+  @keyframes breathe{0%,100%{opacity:1}50%{opacity:.35}}
+  #app{display:grid;height:100vh;grid-template-rows:64px 1fr;position:relative;z-index:2}
+  /* ===== 顶部标题栏 ===== */
+  #header{display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:relative;
+    background:linear-gradient(180deg,#0e2a4d,#0a1c33 60%,#081221);border-bottom:1px solid rgba(80,160,255,.25)}
+  #header::after{content:"";position:absolute;left:0;right:0;bottom:-1px;height:2px;
+    background:linear-gradient(90deg,transparent,rgba(93,176,255,.65),transparent)}
+  #header .side{font-size:13px;color:#8fb3d9;white-space:nowrap;min-width:230px;letter-spacing:1px}
+  #header .side.r{text-align:right}
+  .live{display:inline-block;width:8px;height:8px;border-radius:50%;background:#4caf50;margin-right:7px;
+    vertical-align:middle;box-shadow:0 0 8px #4caf50;animation:breathe 2s infinite}
+  #header .title{position:absolute;left:50%;transform:translateX(-50%);text-align:center}
+  #header .title b{font-size:21px;letter-spacing:5px;color:#e8f4ff;
+    text-shadow:0 0 20px rgba(80,180,255,.6),0 0 60px rgba(80,180,255,.25)}
+  #header .title span{display:block;font-size:10px;color:#6f9ac9;letter-spacing:8px;margin-top:3px}
+  #focusBtn{display:none;position:absolute;right:230px;top:18px;background:rgba(30,90,160,.5);color:#fff;
+    border:1px solid #5db0ff;border-radius:6px;padding:5px 14px;font-size:12px;cursor:pointer;letter-spacing:2px;
+    box-shadow:0 0 12px rgba(93,176,255,.3)}
+  #focusBtn:hover{background:rgba(30,90,160,.8)}
+  /* ===== 中区三栏 ===== */
+  #middle{display:grid;grid-template-columns:clamp(235px,22vw,320px) minmax(0,1fr) clamp(255px,26vw,400px);min-height:0}
+  #left{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:0;border-right:1px solid rgba(80,160,255,.15);overflow-y:auto}
+  #left::-webkit-scrollbar{width:5px}
+  #left::-webkit-scrollbar-thumb{background:rgba(80,160,255,.3);border-radius:2px}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .card{background:repeating-linear-gradient(45deg,rgba(93,176,255,.05) 0 1px,transparent 1px 6px),
+    linear-gradient(180deg,rgba(15,38,70,.8),rgba(10,25,48,.8));
+    border:1px solid rgba(80,160,255,.25);border-radius:8px;
+    padding:5px 8px;text-align:center;position:relative;overflow:hidden;
+    box-shadow:0 0 10px rgba(93,176,255,.05)}
+  .card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+    background:linear-gradient(180deg,#5db0ff,#1e4a7a)}
+  .card .v{font-size:15px;color:#7fd0ff;font-weight:bold;line-height:1.25;text-shadow:0 0 12px rgba(127,208,255,.45)}
+  .card .k{font-size:10px;color:#8fa8c8;margin-top:1px;letter-spacing:1px}
+  /* 结构监测时序图（v10：移至右侧栏，固定高度确保 ECharts 正常渲染） */
+  #chartTrendBox{flex:0 0 clamp(170px,26vh,280px);height:clamp(170px,26vh,280px);background:rgba(15,38,70,.45);border:1px solid rgba(80,160,255,.2);
+    border-radius:8px;padding:6px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  #chartTrendBox::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  #chartTrendBox::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  #chartTrendBox .pt{font-size:12px;color:#8fb3d9;padding:0 4px 2px;letter-spacing:1px;display:flex;align-items:center;justify-content:space-between;height:24px;white-space:nowrap}
+  #sensorSelWrap select{background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);border-radius:4px;
+    font-size:11px;padding:1px 4px;outline:none}
+  #sensorSelWrap select:focus{border-color:#5db0ff}
+  #chartTrend{width:100%;height:calc(100% - 26px)}
+  /* 结构受力摘要 */
+  #structureBox{background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;
+    padding:8px 12px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  #structureBox::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  #structureBox::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  #structureBox .pt{font-size:12px;color:#8fb3d9;margin-bottom:3px;letter-spacing:2px;padding-left:8px;border-left:2px solid #5db0ff}
+  /* 结构摘要：2×2 紧凑网格（标签/值/单位 单行排版，不占高度） */
+  #structureBox .g2{display:grid;grid-template-columns:1fr 1fr;gap:3px 8px;margin:1px 0 3px}
+  #structureBox .cell{font-size:10px;color:#8fa8c8;line-height:1.35;background:rgba(80,160,255,.07);
+    border:1px solid rgba(80,160,255,.14);border-radius:4px;padding:1px 5px;min-width:0;overflow:hidden;white-space:nowrap}
+  #structureBox .cell span{font-size:9px;color:#8fa8c8;margin-right:2px}
+  #structureBox .cell b{color:#7fd0ff;font-size:12px}
+  #structureBox .cell small{color:#8fa8c8;font-size:9px;margin-left:2px}
+  #structureBox .cell small b{color:#9fc3e8;font-size:9px}
+  #structureBox .legend{margin:2px 0 3px;font-size:9px;color:#8fa8c8;line-height:1.6;white-space:nowrap;overflow:hidden}
+  #structureBox .legend b{color:#7fd0ff}
+  #structureBox .legend i{display:inline-block;width:8px;height:8px;border-radius:2px;margin:0 3px 0 7px;vertical-align:-1px}
+  /* 逐杆件校核表（14 段） */
+  #structureBox .segWrap{max-height:118px;overflow-y:auto;margin-top:3px;border-top:1px solid rgba(80,160,255,.15);padding-top:3px}
+  #page-structure #structureBox .segWrap{max-height:300px}
+  #structureBox .segWrap::-webkit-scrollbar{width:4px}
+  #structureBox .segWrap::-webkit-scrollbar-thumb{background:rgba(80,160,255,.35);border-radius:2px}
+  #segTable{width:100%;border-collapse:collapse;font-size:11px}
+  #segTable th{color:#8fb3d9;text-align:left;padding:2px 4px;border-bottom:1px solid rgba(80,160,255,.2);font-weight:normal;position:sticky;top:0;background:#0e2238}
+  #segTable td{padding:2px 4px;border-bottom:1px solid rgba(80,160,255,.08)}
+  /* 中央 3D */
+  #center{position:relative;min-height:0;overflow:hidden;margin:6px;border-radius:10px;
+    border:1px solid rgba(80,160,255,.18);box-shadow:inset 0 0 50px rgba(93,176,255,.07)}
+  /* 全局页面导航：主区域底部居中悬浮 */
+  #navBar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:10px;z-index:20;
+    background:rgba(8,18,33,.78);padding:7px 16px;border:1px solid rgba(80,160,255,.28);border-radius:10px;
+    box-shadow:0 4px 18px rgba(0,0,0,.4)}
+  #navBar .btn{background:rgba(15,38,70,.6);border:1px solid rgba(80,160,255,.3);color:#9fc3e8;border-radius:8px;
+    padding:6px 20px;font-size:13px;cursor:pointer;text-align:center;transition:.15s;user-select:none;letter-spacing:2px;
+    box-shadow:0 0 8px rgba(93,176,255,.05)}
+  #navBar .btn:hover{background:rgba(30,90,160,.5);color:#fff;box-shadow:0 0 14px rgba(93,176,255,.2)}
+  #navBar .btn.on{background:rgba(30,90,160,.6);color:#fff;border-color:#5db0ff;box-shadow:0 0 16px rgba(93,176,255,.35)}
+  /* 扫描线：只在风机 3D 区域 */
+  #center::after{content:"";position:absolute;left:0;right:0;height:2px;top:-2%;z-index:5;pointer-events:none;
+    background:linear-gradient(90deg,transparent,rgba(93,176,255,.5),transparent);
+    animation:scan 6s linear infinite}
+  /* 右侧 */
+  #right{padding:10px;display:flex;flex-direction:column;gap:8px;min-height:0;border-left:1px solid rgba(80,160,255,.15);overflow-y:auto}
+  #right::-webkit-scrollbar{width:5px}
+  #right::-webkit-scrollbar-thumb{background:rgba(80,160,255,.3);border-radius:2px}
+  .panel{background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;
+    padding:8px 12px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  .panel::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  .panel::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  .panel .pt{font-size:12px;color:#8fb3d9;margin-bottom:4px;letter-spacing:2px;padding-left:8px;border-left:2px solid #5db0ff}
+  #runPanel .row{font-size:14px;line-height:2.0}
+  #runPanel .row b{color:#7fd0ff;text-shadow:0 0 8px rgba(127,208,255,.4)}
+  #runPanel .sub{font-size:11px;color:#8fa8c8;line-height:1.8}
+  .st{display:inline-block;padding:2px 12px;border-radius:4px;font-size:12px;color:#fff;background:#4a6a8a}
+  #turbineSel{background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);border-radius:4px;
+    padding:3px 6px;font-size:13px;outline:none;margin-left:4px}
+  #turbineSel:focus{border-color:#5db0ff;box-shadow:0 0 8px rgba(93,176,255,.3)}
+  #selHint{font-size:11px;color:#7fd0ff;min-height:15px;padding:2px 0 0 8px}
+  /* 全场状态饼图（右侧） */
+  #powerPanel{flex:1.2 1 0;min-height:250px;height:clamp(255px,38vh,420px);background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;margin-top:6px;padding:0 6px;position:relative}
+  #powerPanel .pt{font-size:12px;color:#8fb3d9;padding-left:8px;border-left:2px solid #5db0ff;letter-spacing:2px;margin:4px 0}
+  #powerPanel .g2{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:2px 8px;margin:2px 0}
+  #powerPanel .cell{font-size:9px;color:#6f88a8;display:flex;flex-direction:column;align-items:flex-start;line-height:1.45;min-width:0;overflow:hidden}
+  #powerPanel .cell b{font-size:13px;color:#3dd68c;white-space:nowrap}
+  #powerPanel .cell small{font-size:9px;color:#6f88a8;margin-left:0}
+  #chartPower{width:100%;height:clamp(68px,10vh,115px)}
+  #pieBox{flex:1 1 0;min-height:140px;height:clamp(140px,19vh,225px);background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;
+    padding:4px 8px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06)}
+  #pieBox::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  #pieBox .pt{font-size:12px;color:#8fb3d9;padding-left:8px;border-left:2px solid #5db0ff;letter-spacing:2px}
+  #chartPie{width:100%;height:calc(100% - 20px)}
+  #sensorTable{width:100%;border-collapse:collapse;font-size:12px}
+  #sensorTable th{color:#8fb3d9;text-align:left;padding:3px 4px;border-bottom:1px solid rgba(80,160,255,.2);font-weight:normal}
+  #sensorTable td{padding:3px 4px;border-bottom:1px solid rgba(80,160,255,.08)}
+  #sensorBody tr{cursor:pointer}
+  #sensorBody tr:hover{background:rgba(80,160,255,.08)}
+  .ok{color:#7fd0ff}
+  .bad{color:#ff5252;font-weight:bold}
+  .warn{color:#ffd54f;font-weight:bold}
+  /* ===== 多页面布局（v11） ===== */
+  .page{display:none;padding:10px;gap:8px;min-height:0;grid-template-columns:clamp(320px,27vw,430px) minmax(0,1fr) clamp(280px,26vw,400px);grid-template-rows:1fr;overflow:hidden}
+  .page.on{display:grid}
+  .page .col{display:flex;flex-direction:column;gap:8px;min-height:0;overflow-y:auto}
+  .page .col::-webkit-scrollbar{width:5px}
+  .page .col::-webkit-scrollbar-thumb{background:rgba(80,160,255,.3);border-radius:2px}
+  #chartBarBox,#tableBox,#statBox{display:flex;flex-direction:column;flex:1;min-height:0;
+    background:repeating-linear-gradient(45deg,rgba(93,176,255,.04) 0 1px,transparent 1px 7px),
+    rgba(15,38,70,.4);
+    border:1px solid rgba(80,160,255,.18);border-radius:8px;padding:6px}
+  #chartBar{width:100%;height:calc(100% - 42px)}
+  #structBar{width:100%;height:100%}
+  #chartBarBox .statRow{font-size:11px;color:#cfe3ff;padding:1px 4px 4px;letter-spacing:1px;line-height:1.6}
+  #chartBarBox .statRow b{color:#7fd0ff;text-shadow:0 0 8px rgba(127,208,255,.4)}
+  #chartBarBox .statRow .tag{font-size:10px;color:#8fa8c8;border:1px solid rgba(80,160,255,.3);
+    border-radius:3px;padding:0 5px;margin-left:8px;letter-spacing:1px}
+  .statRow select{background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);
+    border-radius:4px;font-size:11px;padding:1px 4px;outline:none;margin-left:6px}
+  .statRow select:focus{border-color:#5db0ff}
+  #chartBarBox #chartBar{width:100%;height:calc(100% - 42px)}
+  #tableBox .statRow,#statBox .statRow{font-size:11px;color:#cfe3ff;padding:1px 4px 4px;letter-spacing:1px;line-height:1.6}
+  #tableBox .statRow b,#statBox .statRow b{color:#7fd0ff}
+  #tableBox table,#statBox table{width:100%;border-collapse:collapse;font-size:11px}
+  #tableBox th,#statBox th{color:#8fb3d9;text-align:left;padding:4px 8px;border-bottom:1px solid rgba(80,160,255,.25);white-space:nowrap}
+  #tableBox td,#statBox td{padding:3px 8px;border-bottom:1px solid rgba(80,160,255,.08);white-space:nowrap}
+  #statBox td{cursor:pointer}
+  #statBox td:hover{background:rgba(80,160,255,.08)}
+  /* 巡检表滚动容器：固定表头 + 内容滚动 */
+  #tableBox .tblWrap,#statBox .tblWrap{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;margin-top:4px}
+  #tableBox .tblWrap::-webkit-scrollbar,#statBox .tblWrap::-webkit-scrollbar{width:6px}
+  #tableBox .tblWrap::-webkit-scrollbar-thumb,#statBox .tblWrap::-webkit-scrollbar-thumb{background:rgba(80,160,255,.35);border-radius:3px}
+  #tableBox th,#statBox th{position:sticky;top:0;background:#0e2238;z-index:1}
+  /* ===== 弹层 ===== */
+  #alertBar{position:absolute;top:74px;left:50%;transform:translateX(-50%);display:none;background:#c62828;color:#fff;
+    padding:10px 24px;border-radius:8px;font-size:15px;font-weight:bold;z-index:30;
+    box-shadow:0 4px 20px rgba(198,40,40,.5);animation:blink 1s infinite}
+  #infoCard{position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);display:none;
+    background:rgba(8,22,40,.94);color:#e8f4ff;padding:10px 16px;border-radius:8px;font-size:12px;line-height:1.7;
+    z-index:20;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.5);max-width:300px;
+    border:1px solid rgba(80,160,255,.4)}
+  #infoCard b{color:#7fd0ff;font-size:14px;letter-spacing:1px}
+  #infoCard span{font-size:12px;color:#cfe3ff}
+  /* ===== 环段损伤分析面板 ===== */
+  #damageBox{background:rgba(15,38,70,.55);border:1px solid rgba(80,160,255,.2);border-radius:8px;
+    padding:8px 12px;position:relative;box-shadow:0 0 14px rgba(93,176,255,.06);flex-shrink:0}
+  #damageBox::before{content:"";position:absolute;left:-1px;top:-1px;width:12px;height:12px;
+    border-left:2px solid #5db0ff;border-top:2px solid #5db0ff}
+  #damageBox::after{content:"";position:absolute;right:-1px;bottom:-1px;width:12px;height:12px;
+    border-right:2px solid #5db0ff;border-bottom:2px solid #5db0ff}
+  #damageBox .pt{font-size:12px;color:#8fb3d9;margin-bottom:5px;letter-spacing:1px;padding-left:8px;border-left:2px solid #5db0ff}
+  #damageBox .dmgCtl{display:grid;grid-template-columns:1fr 1fr;gap:3px 10px;margin-bottom:5px}
+  #damageBox .ctl{display:flex;align-items:center;gap:4px;font-size:10px;color:#8fa8c8;white-space:nowrap}
+  #damageBox .ctl span{min-width:52px}
+  #damageBox .ctl input{flex:1;min-width:0;accent-color:#5db0ff;height:12px}
+  #damageBox .ctl b{color:#7fd0ff;font-size:10px;min-width:44px;text-align:right}
+  #damageBox .dmgRes{margin:2px 0 4px}
+  #damageBox .cell small{color:#8fa8c8;font-size:9px;margin-left:2px}
+  #damageBox .dmgCharts{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  #damageBox .mc{height:96px;background:rgba(8,22,40,.5);border:1px solid rgba(80,160,255,.14);border-radius:5px}
+  #damageBox .dmgTab{display:flex;gap:4px;margin-bottom:5px}
+  #damageBox .dmgTab button{flex:1;background:rgba(8,22,40,.6);border:1px solid rgba(80,160,255,.25);color:#8fa8c8;font-size:10px;padding:3px 0;border-radius:4px;cursor:pointer}
+  #damageBox .dmgTab button.on{background:rgba(29,78,140,.5);color:#cfe3ff;border-color:#5db0ff}
+  #damageBox .invRow{display:flex;align-items:center;gap:6px;font-size:10px;color:#8fa8c8;margin-bottom:5px}
+
+  #damageBox .aiCard{margin:3px 0 4px;border:1px solid rgba(90,220,160,.35);border-radius:6px;padding:5px 6px;background:linear-gradient(180deg,rgba(8,36,28,.35),rgba(8,22,40,.25))}
+  #damageBox .aiCard .aiHead{display:flex;align-items:center;gap:6px;font-size:10px;color:#7fe8b8;margin-bottom:3px;font-weight:bold}
+  #damageBox .aiCard .aiTag{font-size:8px;color:#6fae8f;font-weight:normal;border:1px solid rgba(90,220,160,.3);border-radius:8px;padding:0 5px}
+  #damageBox .aiCard .dmgRes{margin:0}
+  #damageBox .aiCard .cell small{color:#6fae8f}
+  #damageBox .invRow b{flex:1;color:#7fd0ff;font-weight:normal}
+  #damageBox #btnInvert{background:linear-gradient(180deg,#2f7fd0,#1f5f9e);border:1px solid #5db0ff;color:#fff;font-size:10px;padding:4px 10px;border-radius:4px;cursor:pointer}
+  #damageBox #btnInvert:active{filter:brightness(.85)}
+
+  /* ===== 屏幕自适应媒体查询（v14.4） ===== */
+  @media (max-height:800px){
+    #header{padding:0 14px}
+    .cards .card .v{font-size:13px}
+    .cards .card .k{font-size:9px}
+    #powerPanel .cell b{font-size:12px}
+    #chartPower{height:clamp(56px,9vh,82px)}
+    #chartPwrBar{height:clamp(68px,11vh,100px)}
+    #pieBox{min-height:118px;height:clamp(118px,17vh,170px)}
+    #chartTrendBox{flex-basis:clamp(140px,22vh,200px);height:clamp(140px,22vh,200px)}
+    .page .col{gap:6px}
+    #damageBox .ctl input{height:10px}
+  }
+  @media (max-width:1100px){
+    #middle{grid-template-columns:minmax(210px,24vw) minmax(0,1fr) minmax(230px,28vw)}
+    .page{grid-template-columns:minmax(300px,30vw) minmax(0,1fr) minmax(255px,30vw)}
+    #header .title b{font-size:15px}
+    #powerPanel .cell b{font-size:12px}
+  }
+  @media (min-width:1800px) and (min-height:1000px){
+    .cards .card .v{font-size:18px}
+    #powerPanel .cell b{font-size:15px}
+    #chartPower{height:clamp(90px,11vh,130px)}
+    #chartPwrBar{height:clamp(110px,15vh,170px)}
+    .card .k{font-size:11px}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- 顶部标题栏 -->
+  <div id="header">
+    <div class="side"><span class="live"></span>蒙城县板桥集风电场 · 全场结构健康监测</div>
+    <div class="title"><b>托塔天王风电混塔数字孪生平台</b><span>TUOTA TIANWANG WIND TURBINE DIGITAL TWIN</span></div>
+    <div class="side r" id="clock">--</div>
+    <select id="turbineSelG" title="切换聚焦风机" style="background:#0e2a4d;color:#cfe3ff;border:1px solid rgba(80,160,255,.4);border-radius:4px;font-size:12px;padding:3px 6px;outline:none;cursor:pointer;margin-right:10px"></select>
+    <button id="focusBtn" onclick="window.exitFocus && window.exitFocus()">✕ 退出聚焦</button>
+  </div>
+
+  <!-- 中区三栏 -->
+      <!-- 页面一：总览（3D 主视觉 + 关键指标 + 全场状态） -->
+    <div id="middle">
+      <div id="left">
+<div class="cards">
+        <div class="card"><div class="v" id="c_total">--</div><div class="k">风机总数</div></div>
+        <div class="card"><div class="v" id="c_run">--</div><div class="k">运行台数</div></div>
+        <div class="card"><div class="v" id="c_alarm">--</div><div class="k">告警台数</div></div>
+        <div class="card"><div class="v" id="c_health">--</div><div class="k">结构健康率</div></div>
+      </div>
+<div id="powerPanel">
+        <div class="pt">全场功率与发电（实时估算）</div>
+        <div class="g2">
+          <div class="cell"><span>全场实时功率</span><b id="p_total">--</b><small>MW</small></div>
+          <div class="cell"><span>今日发电量</span><b id="p_today">--</b><small>MWh</small></div>
+          <div class="cell"><span>平均单机功率</span><b id="p_avg">--</b><small>MW</small></div>
+          <div class="cell"><span>等效利用小时</span><b id="p_hrs">--</b><small>h</small></div>
+        </div>
+        <div id="chartPower"></div>
+        <div style="font-size:10px;color:#6f88a8;margin:2px 0 0 8px">各风机实时出力（MW）</div>
+        <div id="chartPwrBar" style="width:100%;height:clamp(88px,13vh,150px)"></div>
+      </div>
+      <div id="pieBox">
+        <div class="pt">全场风机状态分布</div>
+        <div id="chartPie"></div>
+      </div>
+      </div>
+      <!-- 中：3D 场景 -->
+      <div id="center"></div>
+      <!-- 右：运行数据 + 传感器摘要 -->
+      <div id="right">
+<div class="panel" id="runPanel">
+        <div class="pt">实时运行参数（当前风机 <select id="turbineSel"></select>）</div>
+        <div class="row">风速 <b id="d_ws">--</b> m/s &nbsp;&nbsp; 功率 <b id="d_pw">--</b> kW</div>
+        <div class="row">转速 <b id="d_rpm">--</b> rpm &nbsp;&nbsp; 状态 <b class="st" id="d_st">--</b></div>
+        <div class="row">单机今日发电 <b id="d_day">--</b> MWh</div>
+        <div class="sub">注：功率按风功率曲线估算，监测重点为结构健康</div>
+        <div id="selHint"></div>
+      </div>
+<div class="panel" id="guidePanel" style="margin-top:8px">
+        <div class="pt">📄 维修指导书</div>
+        <div style="font-size:10px;color:#8fa8c8;line-height:1.7;margin:2px 0 6px">按当前聚焦风机的传感器实测与识别结果，自动生成含损伤定位、退化率、剩余寿命与维修建议的指导书。</div>
+        <button id="btnGuide2" type="button" style="width:100%;font-size:11px;background:linear-gradient(180deg,#2f7fd0,#1f5f9e);border:1px solid #5db0ff;color:#fff;padding:7px 0;border-radius:6px;cursor:pointer">生成并导出维修指导书</button>
+      </div>
+<div class="panel" style="flex:1;min-height:0">
+        <div class="pt">结构监测传感器（点击行查看时序）</div>
+        <table id="sensorTable">
+          <tr><th>项目</th><th>测点</th><th>实时值</th><th>状态</th></tr>
+          <tbody id="sensorBody"></tbody>
+        </table>
+      </div>
+      </div>
+    </div>
+
+  <!-- 底部：导航 + 图表切换 -->
+  
+    <!-- 页面二：结构监测（杆系力学 + 环段损伤分析） -->
+    <div id="page-structure" class="page">
+      <div class="col"><div id="structureBox">
+        <div class="pt">杆系力学响应（悬臂杆单元法 · 固体力学）</div>
+        <div class="g2">
+          <div class="cell"><span>应力比</span><b id="s_ratio">--</b><small id="s_ratio_pos">--</small></div>
+          <div class="cell"><span>应力</span><b id="s_sigma">--</b><small>MPa</small></div>
+          <div class="cell"><span>位移/容许</span><b id="s_disp">--</b><small>/<b id="s_dispA">--</b>mm <span id="s_dispSt">--</span></small></div>
+          <div class="cell"><span>寿命</span><b id="s_life">--</b><small>年 <span id="s_lifeSt">--</span></small></div>
+        </div>
+        <div class="legend">损伤 <b id="s_dmg">--</b>&nbsp;<i style="background:#3dd68c"></i>正常<i style="background:#ffd54f"></i>预警<i style="background:#ff5252"></i>超限&nbsp;·&nbsp;锚索超限放大应力（预应力损失）</div>
+        <div class="segWrap">
+          <table id="segTable">
+            <thead><tr><th>段</th><th>高程m</th><th>材质</th><th>应力MPa</th><th>应力比</th><th>状态</th></tr></thead>
+            <tbody id="segTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+      <div class="col">
+        <div class="panel" style="flex:1.4;min-height:0">
+          <div class="pt">杆系应力比 · 高程分布（红>0.8 超限 / 黄>0.5 预警）</div>
+          <div id="structBar"></div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="pt">分析模型与方法</div>
+          <div style="font-size:11px;color:#8fa8c8;line-height:1.9;padding:4px 6px">
+            塔体离散为 14 段环形截面杆单元（混凝土 104.7m＋过渡 1.8m＋钢 27m，总高 138.1m），悬臂固接；荷载＝机舱 2500kN＋叶片推力（0.5ρv²ACt）＋塔身风载；强度校核 σ=N/A+M/W，位移限值 H/100=1381mm。
+            <br>环段损伤：B(z)=B0(z)·(1−d)，单位荷载法求位移比、Rayleigh–Ritz 求频率比、简谐风振动力放大、S–N 疲劳（Δσ³N=C）＋Miner 累积。
+          </div>
+        </div>
+      </div>
+      <div class="col"><div id="damageBox">
+        <div class="pt">损伤识别（传感器实测 → 损伤定位 → 寿命预测）</div>
+        <div id="invPanel">
+          <div class="invRow"><span>识别对象</span><b id="invTurbine">--</b><button id="btnInvert" type="button">运行识别</button><label style="display:flex;align-items:center;gap:4px;margin-left:8px;font-size:11px;color:#cfe3ff;cursor:pointer;white-space:nowrap"><input id="autoInv" type="checkbox" checked>实时自动<span id="invTime" style="font-size:10px;color:#6f88a8">--</span></label></div>
+          <div class="dmgRes g2">
+            <div class="cell"><span>实测基频</span><b id="invF">--</b><small id="invF0">--</small></div>
+            <div class="cell"><span>应变比峰值</span><b id="invX">--</b><small id="invX0">--</small></div>
+            <div class="cell"><span>识别损伤起点</span><b id="invA">--</b><small id="invARange">--</small></div>
+            <div class="cell"><span>识别退化率</span><b id="invD">--</b><small id="invDRange">--</small></div>
+            <div class="cell"><span>识别剩余寿命</span><b id="invLife">--</b><small>年</small></div>
+            <div class="cell"><span>拟合误差</span><b id="invErr">--</b><small id="invHit">--</small></div>
+          </div>
+          <div class="aiCard">
+            <div class="aiHead">AI 代理模型快速反演<span class="aiTag">毫秒级 · 双通道互校</span></div>
+            <div class="dmgRes g2">
+              <div class="cell"><span>AI 损伤起点</span><b id="aiA">--</b><small>代理模型输出</small></div>
+              <div class="cell"><span>AI 退化率</span><b id="aiD">--</b><small>代理模型输出</small></div>
+              <div class="cell"><span>AI 剩余寿命</span><b id="aiLife">--</b><small>年</small></div>
+              <div class="cell"><span>通道一致性</span><b id="aiCmp">--</b><small id="aiTime">--</small></div>
+            </div>
+          </div>
+          <div class="legend">方法：实测应变阵列剖面（沿高 13 测点）＋基频 vs 模型预测网格（a×d）加权最小二乘反演，应变权重 0.7·频率 0.3；识别值自动同步到 3D 损伤环与寿命预测。<br>AI 通道：18 维特征（13 应变比+峰值高度/位置/平坦度+基频比）→ 神经网络代理模型毫秒级反演（a,d），与力学网格反演交叉验证。</div>
+        </div>
+      </div>
+      </div>
+    </div>
+
+    <!-- 页面三：数据分析（测点时序 + 寿命预测 + 健康统计） -->
+    <div id="page-analysis" class="page">
+      <div class="col">
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="pt" style="display:flex;align-items:center;justify-content:space-between;height:22px;white-space:nowrap">测点时序 · 实测+预测（阈值红线＝预警限值）<span id="sensorSelWrap"><select id="sensorSel" onchange="window.onSensorTypeChange && window.onSensorTypeChange(this.value)">
+              <option value="cable">锚索张力</option>
+              <option value="strain">应变</option>
+              <option value="settle">沉降</option>
+              <option value="gap">开合度</option>
+              <option value="tilt">倾斜</option>
+              <option value="vib">振动</option>
+            </select></span></div>
+          <div id="chartTrend" style="width:100%;flex:1"></div>
+        </div>
+      </div>
+      <div class="col">
+        <div id="chartBarBox">
+
+        <div class="statRow" id="statRow">加载中…</div>
+        <div class="statRow" id="hStat" style="font-size:11px">--</div>
+        <div id="chartBar"></div>
+      </div>
+      </div>
+      <div class="col">
+        <div class="panel" style="flex:0 0 128px;min-height:0">
+          <div class="pt">全场结构健康统计</div>
+          <div id="statSumHealth" style="font-size:11px;line-height:1.7;padding:4px 6px">加载中…</div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="pt">六类传感器状态分布</div>
+          <div id="healthBars" style="padding:6px 4px"></div>
+        </div>
+        <div class="panel" style="flex:0 0 104px;min-height:0">
+          <div class="pt">监测重点</div>
+          <div style="font-size:11px;color:#8fa8c8;line-height:1.8;padding:4px 6px">功率仅作运行观测；结构健康＝应力比/位移/寿命综合判定；锚索张力超限将放大塔身应力（预应力损失）。</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 页面四：设备巡检（巡检矩阵 + 传感器目录） -->
+    <div id="page-inspect" class="page">
+      <div class="col">
+        <div class="panel" style="flex:0 0 176px;min-height:0">
+          <div class="pt">巡检汇总</div>
+          <div id="patrolCards" style="padding:4px 2px"></div>
+        </div>
+        <div class="panel" style="flex:1;min-height:0">
+          <div class="pt">巡检说明</div>
+          <div style="font-size:11px;color:#8fa8c8;line-height:1.9;padding:4px 6px">
+            按风机逐台核对六类传感器（锚索张力/应变/沉降/开合度/倾斜/振动）；超限项（红）需现场复核，预警项（黄）纳入观察；点击「传感器目录」任意行可跳转「数据分析」页查看该传感器测点时序。
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div id="tableBox">
+
+        <div class="statRow" id="patrolRow">加载中…</div>
+        <div class="tblWrap">
+          <table>
+            <thead><tr><th>风机</th><th>运行状态</th><th>超限项（实时值）</th><th>巡检结论</th><th>巡检时间</th></tr></thead>
+            <tbody id="detailBody"></tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+      <div class="col">
+        <div id="statBox">
+
+        <div class="statRow" id="statSum">加载中…</div>
+        <div class="tblWrap">
+          <table>
+            <thead><tr><th>风机</th><th>传感器</th><th>型号</th><th>量程</th><th>测点</th><th>实时值(峰值)</th><th>状态</th></tr></thead>
+            <tbody id="statBody"></tbody>
+          </table>
+        </div>
+      </div>
+      </div>
+    </div>
+
+  <!-- 全局页面导航 -->
+  <!-- 页面五：损伤建模（工程师计算沙盒 · 独立单风机 3D，不影响平台原有功能） -->
+  <div id="page-model" class="page">
+    <div class="col">
+      <div class="panel" style="flex:1;min-height:0;overflow-y:auto">
+        <div class="pt">正向分析 · 参数输入（独立计算沙盒）</div>
+        <div class="dmgCtl">
+          <div class="ctl"><span>损伤起点</span><input id="m_dmgA" type="range" min="0" max="133.5" step="0.5"><b id="m_dmgAv">66.8m</b></div>
+          <div class="ctl"><span>损伤长度</span><input id="m_dmgLen" type="range" min="0.5" max="20" step="0.5"><b id="m_dmgLenV">6.7m</b></div>
+          <div class="ctl"><span>退化率 d</span><input id="m_dmgD" type="range" min="0" max="0.9" step="0.05"><b id="m_dmgDV">0.30</b></div>
+          <div class="ctl"><span>阻尼比 ζ</span><input id="m_dmgZeta" type="range" min="0.005" max="0.05" step="0.005"><b id="m_dmgZetaV">0.020</b></div>
+          <div class="ctl"><span>激励频率</span><input id="m_dmgExc" type="range" min="0.05" max="1.5" step="0.05"><b id="m_dmgExcV">0.25Hz</b></div>
+        </div>
+        <div class="dmgRes g2">
+          <div class="cell"><span>位移比 δd/δ0</span><b id="m_dispR">--</b><small id="m_dispInc">--</small></div>
+          <div class="cell"><span>频率比 fd/f0</span><b id="m_freqR">--</b><small id="m_f0">--</small></div>
+          <div class="cell"><span>动力放大 DAF</span><b id="m_daf">--</b><small id="m_rd">--</small></div>
+          <div class="cell"><span>钢段应力范围</span><b id="m_ds">--</b><small>MPa</small></div>
+          <div class="cell"><span>年疲劳消耗</span><b id="m_dyr">--</b><small id="m_dyrR">--</small></div>
+          <div class="cell"><span>剩余寿命</span><b id="m_life">--</b><small>年</small></div>
+        </div>
+        <div style="display:flex;gap:4px;margin-top:6px;min-height:0">
+          <div id="m_mcDisp" style="flex:1;height:70px;background:rgba(10,30,58,.5);border:1px solid rgba(80,160,255,.15);border-radius:4px"></div>
+          <div id="m_mcFreq" style="flex:1;height:70px;background:rgba(10,30,58,.5);border:1px solid rgba(80,160,255,.15);border-radius:4px"></div>
+          <div id="m_mcDaf" style="flex:1;height:70px;background:rgba(10,30,58,.5);border:1px solid rgba(80,160,255,.15);border-radius:4px"></div>
+        </div>
+        <div class="legend">独立计算沙盒：滑块参数仅驱动本模块 3D 与结果，不参与传感器实测与损伤识别；识别值（â/d̂）也可写入此处做复核。</div>
+      </div>
+    </div>
+    <div class="col">
+      <div id="model3d" style="width:100%;flex:1;min-height:0;border-radius:8px;overflow:hidden;background:radial-gradient(ellipse at 50% 30%,#12305a,#081528 75%)"></div>
+    </div>
+    <div class="col">
+      <div class="panel" style="flex:1;min-height:0;overflow-y:auto">
+        <div class="pt">损伤定位 · 3D 图例与参数回显</div>
+        <div style="font-size:11px;color:#8fa8c8;line-height:2;padding:4px 6px">
+          <div style="color:#ff8a8a">■ 红色罩壳＝损伤段（不透明度随退化率 d 增大）</div>
+          <div style="color:#ffd54f">■ 黄色环线＝损伤起点 a / 终点 a+len</div>
+          <div style="color:#7fd0ff">■ 蓝色竖线＋端点＝损伤范围尺寸标注</div>
+          <div style="color:#9fc3e8">■ 塔筒分段：砼（浅灰）→ 过渡（深灰）→ 钢（亮灰）</div>
+          <hr style="border-color:rgba(80,160,255,.2)">
+          <div>操作：左键旋转 · 右键平移 · 滚轮缩放</div>
+          <div>当前参数回显：</div>
+          <div id="m_echo" style="color:#7fd0ff">--</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="navBar">
+    <div class="btn on" onclick="switchView('overview')">🏠 总览</div>
+    <div class="btn" onclick="switchView('structure')">📐 结构监测</div>
+    <div class="btn" onclick="switchView('analysis')">📈 数据分析</div>
+    <div class="btn" onclick="switchView('inspect')">🔍 设备巡检</div>
+    <div class="btn" onclick="switchView('model')">🧊 损伤建模</div>
+  </div>
+</div>
+<div id="infoCard"></div>
+<div id="alertBar"></div>
+
+<script type="importmap">
+{"imports":{
+  "three":"https://registry.npmmirror.com/three/0.160.0/files/build/three.module.js",
+  "three/addons/":"https://registry.npmmirror.com/three/0.160.0/files/examples/jsm/"
+}}
+</script>
+<script src="js/echarts.min.js"></script>
+<script src="js/windfarms.js"></script>
+<script src="js/data_v13_5.js"></script>
+<script src="js/structure_v13_5.js"></script>
+<script src="js/charts_v11.js"></script>
+<script src="js/ai_model_v14.js"></script>
+<script src="js/ui_v14_1.js"></script>
+<script src="js/ai_assistant_v14_2.js"></script>
+<script src="js/global_focus_v14.js"></script>
+<script src="js/responsive_v14.js"></script>
+<script type="module" src="js/main_v13_5.js"></script>
+<script type="module" src="js/model3d_v13_5.js"></script>
+<script>document.addEventListener('DOMContentLoaded', function () { var b = document.getElementById('btnGuide2'); if (b) b.onclick = function () { if (window.exportMaintenanceGuide) window.exportMaintenanceGuide(); }; });</script>
+</body>
+</html>
