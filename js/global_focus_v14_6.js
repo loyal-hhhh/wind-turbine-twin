@@ -1,0 +1,130 @@
+/* ============================================================
+   全局风机聚焦切换 v14：顶部下拉框，所有模块可用
+   - 与总览页 turbineSel 双向同步
+   - 默认聚焦 F07（演示损伤塔，打开即见 AI 反算数据）
+   ============================================================ */
+(function () {
+  if (window.__globalFocusInit) return;
+  window.__globalFocusInit = true;
+  var DEMO_FOCUS = 6;            // F07 演示损伤塔（truth: a=20m, d=0.5）
+  var SAVE_KEY = 'wt_global_focus_v14_6';
+  var timer = null;
+
+  // —— 记忆用户风机选择：首次打开默认演示塔；之后按用户上次选择恢复，强制刷新不再自动回聚焦 ——
+  function loadRec() {
+    try {
+      var s = localStorage.getItem(SAVE_KEY);
+      if (s) { var o = JSON.parse(s); if (o && typeof o.t !== 'undefined') return o; }
+    } catch (e) {}
+    return null;
+  }
+  function saveRec(o) {
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(o)); } catch (e) {}
+  }
+
+  function syncFromGlobal() {
+    var sel = document.getElementById('turbineSelG');
+    if (!sel) return;
+    var v = Number(sel.value);
+    if (isNaN(v)) return;
+    window.SELECTED = v;
+    var s2 = document.getElementById('turbineSel');
+    if (s2 && s2.options.length && s2.value !== String(v)) s2.value = String(v);
+    if (window.focusTurbine) window.focusTurbine(v);
+    // 结构监测页识别面板：切换风机后刷新实测读数（识别结果下次自动/手动运行更新）
+    if (window.__invRefresh) window.__invRefresh();
+    // 总览页聚焦提示
+    var hint = document.getElementById('selHint');
+    if (hint && window.WIND_FARMS) hint.textContent = '已聚焦 ' + (window.WIND_FARMS[v] || {}).name + '（点击"退出聚焦"返回全场）';
+    // 刷新当前页图表数据
+    if (window.__refreshCharts) window.__refreshCharts();
+  }
+  function syncToGlobal() {
+    var s2 = document.getElementById('turbineSel');
+    var sel = document.getElementById('turbineSelG');
+    if (s2 && sel && s2.value !== sel.value) sel.value = s2.value;
+    if (s2) saveRec({ t: Number(s2.value), exited: false });
+  }
+
+  function init() {
+    var wf = window.WIND_FARMS;
+    var sel = document.getElementById('turbineSelG');
+    var s2 = document.getElementById('turbineSel');
+    if (!wf || !sel) return false;
+    if (!s2 || !s2.options.length) return false;      // 等总览下拉填充完成
+    if (!sel.options.length) {
+      wf.forEach(function (w, i) {
+        var o = document.createElement('option');
+        o.value = String(i);
+        o.textContent = w.name;
+        sel.appendChild(o);
+      });
+      sel.value = String(window.SELECTED || 0);
+    }
+    // 首次加载：默认聚焦 F07 演示塔并记忆；后续按用户上次选择恢复（刷新不再自动聚焦）
+    if (window.__demoApplied !== true) {
+      window.__demoApplied = true;
+      var rec = loadRec();
+      if (rec && wf[rec.t]) {
+        sel.value = String(rec.t);
+        window.SELECTED = Number(rec.t);
+        if (s2 && s2.options.length) s2.value = String(rec.t);
+        // 用户曾退出聚焦 → 保持全场视角；否则恢复聚焦
+        if (!rec.exited && window.focusTurbine) window.focusTurbine(Number(rec.t));
+        if (window.__invRefresh) window.__invRefresh();
+        if (window.__refreshCharts) window.__refreshCharts();
+      } else {
+        // v14.6.3：首次打开不自动聚焦 —— 全场视角 + F07 演示数据（SELECTED 仍为 F07，AI 反算照常显示）
+        sel.value = String(DEMO_FOCUS);
+        window.SELECTED = Number(DEMO_FOCUS);
+        if (s2 && s2.options.length) s2.value = String(DEMO_FOCUS);
+        saveRec({ t: DEMO_FOCUS, exited: true });
+        if (window.__invRefresh) window.__invRefresh();
+        if (window.__refreshCharts) window.__refreshCharts();
+      }
+    }
+    if (!sel.__bound) {
+      sel.__bound = true;
+      sel.addEventListener('change', function () { syncFromGlobal(); saveRec({ t: Number(sel.value), exited: false }); });
+      if (s2) s2.addEventListener('change', syncToGlobal);
+      // 3D 点击风机时同步到全局下拉，并记忆
+      var orig = window.focusTurbine;
+      if (orig && !window.__focusWrap) {
+        window.__focusWrap = true;
+        window.focusTurbine = function (idx) {
+          var r = orig.apply(this, arguments);
+          var g = document.getElementById('turbineSelG');
+          if (g && g.value !== String(idx)) g.value = String(idx);
+          saveRec({ t: idx, exited: false });
+          return r;
+        };
+      }
+      // 退出聚焦：记录，刷新后保持全场视角
+      var oe = window.exitFocus;
+      if (oe && !window.__exitWrap) {
+        window.__exitWrap = true;
+        window.exitFocus = function () {
+          var r = oe.apply(this, arguments);
+          saveRec({ t: window.SELECTED, exited: true });
+          // v14.6.5：退出聚焦 → 聚焦提示同步清空（与聚焦状态绑定）
+          var hint = document.getElementById('selHint');
+          if (hint) hint.textContent = '';
+          return r;
+        };
+      }
+      // focusBtn 兜底记录（HTML 内联 onclick 与监听并存）
+      var fb = document.getElementById('focusBtn');
+      if (fb && !fb.__exitHooked) {
+        fb.__exitHooked = true;
+        fb.addEventListener('click', function () { saveRec({ t: window.SELECTED, exited: true }); });
+      }
+    }
+    return true;
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    timer = setInterval(function () {
+      if (init()) clearInterval(timer);
+    }, 300);
+    setTimeout(function () { if (timer) clearInterval(timer); }, 12000);   // 兜底停止
+  });
+})();
